@@ -1,0 +1,18 @@
+# Terraform provider downloads - large, not needed in repo
+.terraform/
+
+# Lock file - this one you DO want in the repo
+!.terraform.lock.hcl
+
+# State files - contain sensitive resource details
+terraform.tfstate
+terraform.tfstate.backup
+
+# Secrets - NEVER push this
+terraform.tfvars
+
+# Mac system file
+.DS_Store
+
+# Crash logs
+crash.log

@@ -1,0 +1,10 @@
+variable "project_name" {}
+variable "app_sg_id" {}
+variable "public_subnet_1_id" {}
+variable "public_subnet_2_id" {}
+variable "target_group_arn" {}
+variable "db_host" {}
+variable "db_user" {}
+variable "db_password" {}
+variable "db_name" {}
+variable "api_key" {}

@@ -1,0 +1,1 @@
+/api/*  http://zamweather-alb-30702160.us-east-1.elb.amazonaws.com/:splat  200

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ZamWeather</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      color: white;
+    }
+
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, #00c6ff, #0072ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 40px;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 32px;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 14px 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      font-size: 1rem;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .search-box input::placeholder {
+      color: rgba(255,255,255,0.35);
+    }
+
+    .search-box input:focus {
+      border-color: #00c6ff;
+    }
+
+    .search-box button {
+      padding: 14px 28px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(90deg, #00c6ff, #0072ff);
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .search-box button:hover {
+      opacity: 0.85;
+    }
+
+    .weather-card {
+      background: rgba(255,255,255,0.07);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 32px;
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 32px;
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .weather-card.visible {
+      display: block;
+    }
+
+    .city-name {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .condition {
+      font-size: 1rem;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 24px;
+    }
+
+    .temp-display {
+      font-size: 4rem;
+      font-weight: 800;
+      background: linear-gradient(90deg, #00c6ff, #0072ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 24px;
+    }
+
+    .weather-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .weather-item {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .weather-item .label {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.45);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .weather-item .value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .error-card {
+      background: rgba(255, 80, 80, 0.1);
+      border: 1px solid rgba(255, 80, 80, 0.3);
+      border-radius: 16px;
+      padding: 20px 28px;
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 32px;
+      display: none;
+      color: #ff9090;
+      font-size: 0.95rem;
+    }
+
+    .error-card.visible {
+      display: block;
+    }
+
+    .retry-btn {
+      margin-top: 10px;
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,80,80,0.4);
+      background: transparent;
+      color: #ff9090;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .charts-section {
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 32px;
+      display: none;
+    }
+
+    .charts-section.visible {
+      display: block;
+    }
+
+    .chart-card {
+      background: rgba(255,255,255,0.07);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .chart-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 16px;
+    }
+
+    .history-section {
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .history-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 16px;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-item {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .history-item:hover {
+      background: rgba(255,255,255,0.09);
+    }
+
+    .history-city {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .history-detail {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.45);
+      margin-top: 3px;
+    }
+
+    .history-temp {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #00c6ff;
+    }
+
+    .loading {
+      color: rgba(255,255,255,0.5);
+      font-size: 0.9rem;
+      margin: 20px 0;
+    }
+
+    .footer {
+      margin-top: 48px;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.2);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>⛅ ZamWeather</h1>
+  <p class="subtitle">Live weather data powered by AWS</p>
+
+  <div class="search-box">
+    <input
+      type="text"
+      id="cityInput"
+      placeholder="Enter a city name..."
+      onkeydown="if(event.key==='Enter') searchWeather()"
+    />
+    <button onclick="searchWeather()">Search</button>
+  </div>
+
+  <!-- Weather result card -->
+  <div class="weather-card" id="weatherCard">
+    <div class="city-name" id="cityName"></div>
+    <div class="condition" id="conditionText"></div>
+    <div class="temp-display" id="tempDisplay"></div>
+    <div class="weather-grid">
+      <div class="weather-item">
+        <div class="label">Feels Like</div>
+        <div class="value" id="feelsLike"></div>
+      </div>
+      <div class="weather-item">
+        <div class="label">Humidity</div>
+        <div class="value" id="humidity"></div>
+      </div>
+      <div class="weather-item">
+        <div class="label">Wind Speed</div>
+        <div class="value" id="windSpeed"></div>
+      </div>
+      <div class="weather-item">
+        <div class="label">Country</div>
+        <div class="value" id="country"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error card -->
+  <div class="error-card" id="errorCard">
+    <div id="errorMessage"></div>
+    <button class="retry-btn" id="retryBtn" onclick="searchWeather()" style="display:none">
+      Try Again
+    </button>
+  </div>
+
+  <!-- Charts section -->
+  <div class="charts-section" id="chartsSection">
+    <div class="chart-card">
+      <div class="chart-title">5-Day Temperature Forecast</div>
+      <canvas id="forecastChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Search History Temperature Trend</div>
+      <canvas id="historyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Recent searches -->
+  <div class="history-section">
+    <div class="history-title">Recent Searches</div>
+    <div class="history-list" id="historyList">
+      <div class="loading">Loading recent searches...</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Built on AWS — VPC · EC2 · RDS · ALB · Terraform · Netlify
+  </div>
+
+  <script>
+    // Chart instances stored so we can destroy before redrawing
+    let forecastChartInstance = null;
+    let historyChartInstance = null;
+
+    // On page load fetch search history
+    window.onload = function() {
+      loadHistory();
+    };
+
+    async function searchWeather() {
+      const city = document.getElementById('cityInput').value.trim();
+      if (!city) return;
+
+      hideWeatherCard();
+      hideErrorCard();
+      hideCharts();
+
+      try {
+        const response = await fetch('/api/weather?city=' + encodeURIComponent(city));
+        const data = await response.json();
+
+        if (!response.ok) {
+          showError(
+            data.message || 'Something went wrong.',
+            data.error === 'timeout' || data.error === 'connection'
+          );
+          return;
+        }
+
+        showWeather(data);
+        loadHistory();
+        loadCharts(city);
+
+      } catch (err) {
+        showError('Unable to reach the server. Please check your connection.', true);
+      }
+    }
+
+    function showWeather(data) {
+      document.getElementById('cityName').textContent = data.city + ', ' + data.country;
+      document.getElementById('conditionText').textContent = data.condition;
+      document.getElementById('tempDisplay').textContent = data.temperature + '°C';
+      document.getElementById('feelsLike').textContent = data.feels_like + '°C';
+      document.getElementById('humidity').textContent = data.humidity + '%';
+      document.getElementById('windSpeed').textContent = data.wind_speed + ' m/s';
+      document.getElementById('country').textContent = data.country;
+      document.getElementById('weatherCard').classList.add('visible');
+    }
+
+    function hideWeatherCard() {
+      document.getElementById('weatherCard').classList.remove('visible');
+    }
+
+    function hideCharts() {
+      document.getElementById('chartsSection').classList.remove('visible');
+    }
+
+    function showError(message, showRetry) {
+      document.getElementById('errorMessage').textContent = message;
+      document.getElementById('retryBtn').style.display = showRetry ? 'inline-block' : 'none';
+      document.getElementById('errorCard').classList.add('visible');
+    }
+
+    function hideErrorCard() {
+      document.getElementById('errorCard').classList.remove('visible');
+    }
+
+    async function loadHistory() {
+      try {
+        const response = await fetch('/api/history');
+        const data = await response.json();
+        const list = document.getElementById('historyList');
+
+        if (!data.searches || data.searches.length === 0) {
+          list.innerHTML = '<div class="loading">No searches yet. Search a city above!</div>';
+          return;
+        }
+
+        list.innerHTML = data.searches.map(s =>
+          '<div class="history-item" onclick="searchFromHistory(\'' + s.city + '\')">' +
+            '<div>' +
+              '<div class="history-city">' + s.city + '</div>' +
+              '<div class="history-detail">' + s.condition_text + ' · ' + s.searched_at.slice(0, 16) + '</div>' +
+            '</div>' +
+            '<div class="history-temp">' + s.temperature + '°C</div>' +
+          '</div>'
+        ).join('');
+
+      } catch (err) {
+        document.getElementById('historyList').innerHTML =
+          '<div class="loading">Could not load history.</div>';
+      }
+    }
+
+    function searchFromHistory(city) {
+      document.getElementById('cityInput').value = city;
+      searchWeather();
+    }
+
+    async function loadCharts(city) {
+      await Promise.all([
+        loadForecastChart(city),
+        loadCityHistoryChart(city)
+      ]);
+      document.getElementById('chartsSection').classList.add('visible');
+    }
+
+    async function loadForecastChart(city) {
+      try {
+        const response = await fetch('/api/forecast?city=' + encodeURIComponent(city));
+        const data = await response.json();
+
+        if (!data.forecast || data.forecast.length === 0) return;
+
+        const labels = data.forecast.map(function(f) { return f.time.slice(0, 10); });
+        const temps = data.forecast.map(function(f) { return f.temperature; });
+
+        if (forecastChartInstance) {
+          forecastChartInstance.destroy();
+        }
+
+        const ctx = document.getElementById('forecastChart').getContext('2d');
+        forecastChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Temperature (°C)',
+              data: temps,
+              borderColor: '#00c6ff',
+              backgroundColor: 'rgba(0, 198, 255, 0.1)',
+              borderWidth: 2,
+              pointBackgroundColor: '#00c6ff',
+              pointRadius: 5,
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                labels: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } },
+                grid: { color: 'rgba(255,255,255,0.05)' }
+              },
+              y: {
+                ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } },
+                grid: { color: 'rgba(255,255,255,0.05)' }
+              }
+            }
+          }
+        });
+      } catch (err) {
+        console.log('Forecast chart error:', err);
+      }
+    }
+
+    async function loadCityHistoryChart(city) {
+      try {
+        const response = await fetch('/api/cityhistory?city=' + encodeURIComponent(city));
+        const data = await response.json();
+
+        if (!data.history || data.history.length === 0) return;
+
+        const reversed = data.history.slice().reverse();
+        const labels = reversed.map(function(h) { return h.searched_at.slice(0, 16); });
+        const temps = reversed.map(function(h) { return h.temperature; });
+
+        if (historyChartInstance) {
+          historyChartInstance.destroy();
+        }
+
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        historyChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Temperature (°C)',
+              data: temps,
+              borderColor: '#0072ff',
+              backgroundColor: 'rgba(0, 114, 255, 0.1)',
+              borderWidth: 2,
+              pointBackgroundColor: '#0072ff',
+              pointRadius: 5,
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                labels: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } }
+              }
+            },
+            scales: {
+              x: {
+                ticks: {
+                  color: 'rgba(255,255,255,0.5)',
+                  font: { size: 9 },
+                  maxRotation: 45
+                },
+                grid: { color: 'rgba(255,255,255,0.05)' }
+              },
+              y: {
+                ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } },
+                grid: { color: 'rgba(255,255,255,0.05)' }
+              }
+            }
+          }
+        });
+      } catch (err) {
+        console.log('City history chart error:', err);
+      }
+    }
+  </script>
+
+</body>
+</html>
