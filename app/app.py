@@ -1,27 +1,22 @@
 from flask import Flask, request, jsonify
 import requests
-import mysql.connector
+import sqlite3
 import os
 from datetime import datetime
 
 app = Flask(__name__)
 
 # Configuration from environment variables
-# These get injected by the user data script on EC2 boot
-DB_HOST     = os.environ.get('DB_HOST')
-DB_USER     = os.environ.get('DB_USER')
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
-DB_NAME     = os.environ.get('DB_NAME')
-API_KEY     = os.environ.get('OPENWEATHER_API_KEY')
+# DB_PATH points to a local SQLite file instead of a remote MySQL host —
+# this deployment trades RDS for a file on disk (see README trade-offs)
+DB_PATH = os.environ.get('DB_PATH', 'zamweather.db')
+API_KEY = os.environ.get('OPENWEATHER_API_KEY')
 
 def get_db_connection():
     """Create and return a database connection"""
-    return mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
-    )
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     """Create the searches table if it doesn't exist"""
@@ -30,13 +25,13 @@ def init_db():
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS searches (
-                id          INT AUTO_INCREMENT PRIMARY KEY,
-                city        VARCHAR(100),
-                temperature FLOAT,
-                feels_like  FLOAT,
-                humidity    INT,
-                condition   VARCHAR(100),
-                wind_speed  FLOAT,
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                city        TEXT,
+                temperature REAL,
+                feels_like  REAL,
+                humidity    INTEGER,
+                condition   TEXT,
+                wind_speed  REAL,
                 searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -52,8 +47,7 @@ init_db()
 @app.route('/health', methods=['GET'])
 def health():
     """
-    Health check endpoint for the ALB.
-    ALB hits this every 30 seconds.
+    Health check endpoint.
     Returns 200 OK if the app is running.
     """
     return jsonify({"status": "healthy"}), 200
@@ -62,7 +56,7 @@ def health():
 def get_weather():
     """
     Fetch live weather data for a given city.
-    Saves the search to RDS.
+    Saves the search to SQLite.
     Returns weather data as JSON.
     """
     city = request.args.get('city')
@@ -73,7 +67,6 @@ def get_weather():
         }), 400
 
     try:
-        # Call OpenWeatherMap API
         url = "https://api.openweathermap.org/data/2.5/weather"
         params = {
             "q":     city,
@@ -84,13 +77,11 @@ def get_weather():
         try:
             response = requests.get(url, params=params, timeout=10)
         except requests.exceptions.Timeout:
-            # OpenWeatherMap took too long to respond
             return jsonify({
                 "error": "timeout",
                 "message": "The weather service is taking longer than usual. Please wait a moment and try again."
             }), 503
         except requests.exceptions.ConnectionError:
-            # No network connection at all
             return jsonify({
                 "error": "connection",
                 "message": "Unable to reach the weather service right now. Please check your connection and try again."
@@ -98,21 +89,18 @@ def get_weather():
 
         data = response.json()
 
-        # City not found
         if response.status_code == 404:
             return jsonify({
                 "error": "not_found",
                 "message": f"We could not find a city called '{city}'. Please check the spelling and try again."
             }), 404
 
-        # Any other non-200 response from OpenWeatherMap
         if response.status_code != 200:
             return jsonify({
                 "error": "service_error",
                 "message": "The weather service returned an unexpected response. Please try again shortly."
             }), 502
 
-        # Extract the data we need
         weather = {
             "city":        data["name"],
             "country":     data["sys"]["country"],
@@ -124,14 +112,14 @@ def get_weather():
             "icon":        data["weather"][0]["icon"]
         }
 
-        # Save to RDS
+        # Save to SQLite
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO searches
                     (city, temperature, feels_like, humidity, condition, wind_speed)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 weather["city"],
                 weather["temperature"],
@@ -144,9 +132,6 @@ def get_weather():
             cursor.close()
             conn.close()
         except Exception as db_error:
-            # Database write failed but we still have the weather data
-            # Return the weather to the user anyway - do not let a DB
-            # issue prevent the user from seeing their result
             print(f"Database write error: {db_error}")
 
         return jsonify(weather), 200
@@ -156,16 +141,16 @@ def get_weather():
             "error": "unexpected",
             "message": "Something went wrong on our end. Please try again in a moment."
         }), 500
- 
+
 
 @app.route('/history', methods=['GET'])
 def get_history():
     """
-    Retrieve the last 10 weather searches from RDS.
+    Retrieve the last 10 weather searches from SQLite.
     """
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
         cursor.execute('''
             SELECT city, temperature, feels_like,
                    humidity, condition, wind_speed,
@@ -174,11 +159,10 @@ def get_history():
             ORDER BY searched_at DESC
             LIMIT 10
         ''')
-        searches = cursor.fetchall()
+        searches = [dict(row) for row in cursor.fetchall()]
         cursor.close()
         conn.close()
 
-        # Convert datetime objects to strings for JSON
         for search in searches:
             search['searched_at'] = str(search['searched_at'])
 
