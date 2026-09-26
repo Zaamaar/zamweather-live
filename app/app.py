@@ -67,6 +67,7 @@ def get_weather():
         }), 400
 
     try:
+        # Call OpenWeatherMap API
         url = "https://api.openweathermap.org/data/2.5/weather"
         params = {
             "q":     city,
@@ -77,11 +78,13 @@ def get_weather():
         try:
             response = requests.get(url, params=params, timeout=10)
         except requests.exceptions.Timeout:
+            # OpenWeatherMap took too long to respond
             return jsonify({
                 "error": "timeout",
                 "message": "The weather service is taking longer than usual. Please wait a moment and try again."
             }), 503
         except requests.exceptions.ConnectionError:
+            # No network connection at all
             return jsonify({
                 "error": "connection",
                 "message": "Unable to reach the weather service right now. Please check your connection and try again."
@@ -89,18 +92,21 @@ def get_weather():
 
         data = response.json()
 
+        # City not found
         if response.status_code == 404:
             return jsonify({
                 "error": "not_found",
                 "message": f"We could not find a city called '{city}'. Please check the spelling and try again."
             }), 404
 
+        # Any other non-200 response from OpenWeatherMap
         if response.status_code != 200:
             return jsonify({
                 "error": "service_error",
                 "message": "The weather service returned an unexpected response. Please try again shortly."
             }), 502
 
+        # Extract the data we need
         weather = {
             "city":        data["name"],
             "country":     data["sys"]["country"],
@@ -132,6 +138,9 @@ def get_weather():
             cursor.close()
             conn.close()
         except Exception as db_error:
+            # Database write failed but we still have the weather data
+            # Return the weather to the user anyway - do not let a DB
+            # issue prevent the user from seeing their result
             print(f"Database write error: {db_error}")
 
         return jsonify(weather), 200
@@ -146,7 +155,7 @@ def get_weather():
 @app.route('/history', methods=['GET'])
 def get_history():
     """
-    Retrieve the last 10 weather searches from SQLite.
+    Retrieve the last 50 weather searches from SQLite.
     """
     try:
         conn = get_db_connection()
@@ -157,12 +166,13 @@ def get_history():
                    searched_at
             FROM searches
             ORDER BY searched_at DESC
-            LIMIT 10
+            LIMIT 50
         ''')
         searches = [dict(row) for row in cursor.fetchall()]
         cursor.close()
         conn.close()
 
+        # Convert datetime objects to strings for JSON
         for search in searches:
             search['searched_at'] = str(search['searched_at'])
 
@@ -170,6 +180,41 @@ def get_history():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/cityhistory', methods=['GET'])
+def get_city_history():
+    """
+    Retrieve past searches for one specific city,
+    used by the frontend's per-city temperature trend chart.
+    """
+    city = request.args.get('city')
+
+    if not city:
+        return jsonify({"error": "city is required"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT temperature, searched_at
+            FROM searches
+            WHERE city = ?
+            ORDER BY searched_at DESC
+            LIMIT 10
+        ''', (city,))
+        history = [dict(row) for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+
+        for h in history:
+            h['searched_at'] = str(h['searched_at'])
+
+        return jsonify({"history": history}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
