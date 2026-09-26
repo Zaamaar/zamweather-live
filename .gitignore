@@ -16,3 +16,6 @@ terraform.tfvars
 
 # Crash logs
 crash.log
+
+# Local Netlify folder
+.netlify
